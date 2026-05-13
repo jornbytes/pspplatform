@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 
 export type Locale = 'en' | 'nl' | 'de';
 
@@ -377,11 +377,28 @@ const de: Translations = {
 
 const translations: Record<Locale, Translations> = { en, nl, de };
 
-function detectLocale(): Locale {
-  const stored = localStorage.getItem('psp-locale') as Locale | null;
-  if (stored && translations[stored]) return stored;
+const COOKIE_NAME = 'psp-locale';
+
+function getCookieLocale(): Locale | null {
+  const match = document.cookie.split(';').map((c) => c.trim()).find((c) => c.startsWith(`${COOKIE_NAME}=`));
+  if (!match) return null;
+  const val = match.split('=')[1] as Locale;
+  return translations[val] ? val : null;
+}
+
+function setCookieLocale(locale: Locale) {
+  // 1 year, SameSite=Lax
+  const expires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString();
+  document.cookie = `${COOKIE_NAME}=${locale}; expires=${expires}; path=/; SameSite=Lax`;
+}
+
+function getBrowserLocale(): Locale {
   const lang = navigator.language.split('-')[0] as Locale;
   return translations[lang] ? lang : 'en';
+}
+
+function detectLocaleSync(): Locale {
+  return getCookieLocale() ?? getBrowserLocale();
 }
 
 interface I18nContextValue {
@@ -399,12 +416,31 @@ const I18nContext = createContext<I18nContextValue>({
 });
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(detectLocale);
+  const [locale, setLocaleState] = useState<Locale>(detectLocaleSync);
   const [overrides, setOverrides] = useState<Partial<Record<Locale, Partial<Translations>>>>({});
+
+  // IP-based detection only runs once, and only if the user hasn't set a preference yet
+  useEffect(() => {
+    if (getCookieLocale()) return; // user already chose a language
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+    if (!supabaseUrl) return;
+    fetch(`${supabaseUrl}/functions/v1/detect-locale`, {
+      headers: { Authorization: `Bearer ${anonKey}` },
+    })
+      .then((r) => r.json())
+      .then((data: { locale?: string }) => {
+        const detected = data.locale as Locale | undefined;
+        if (detected && translations[detected] && !getCookieLocale()) {
+          setLocaleState(detected);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const setLocale = (l: Locale) => {
     setLocaleState(l);
-    localStorage.setItem('psp-locale', l);
+    setCookieLocale(l);
   };
 
   const applyOverrides = useCallback((dbSettings: Record<string, string>) => {

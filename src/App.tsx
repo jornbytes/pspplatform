@@ -4,6 +4,7 @@ import { Shield, Sun, Moon, ChevronDown } from 'lucide-react';
 import { ThemeProvider, useTheme } from './lib/theme';
 import { I18nProvider, useI18n, LOCALES } from './lib/i18n';
 import { loadAllSettings } from './lib/admin';
+
 import CreateSecret from './pages/CreateSecret';
 import ViewSecret from './pages/ViewSecret';
 import AdminLogin from './pages/AdminLogin';
@@ -78,11 +79,31 @@ function ThemeToggle() {
   );
 }
 
-function Header({ appName, logoUrl }: { appName: string; logoUrl: string }) {
+function LogoMark({ logoUrl, logoDarkUrl }: { logoUrl: string; logoDarkUrl: string }) {
+  const { theme } = useTheme();
+  const activeUrl = theme === 'dark' && logoDarkUrl ? logoDarkUrl : logoUrl;
+
+  if (!activeUrl) {
+    return <Shield className="w-5 h-5 text-teal-600 dark:text-teal-400" />;
+  }
+
+  return (
+    <img
+      key={activeUrl}
+      src={activeUrl}
+      alt="Logo"
+      className="max-w-full max-h-full object-contain"
+      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+    />
+  );
+}
+
+function Header({ appName, logoUrl, logoDarkUrl }: { appName: string; logoUrl: string; logoDarkUrl: string }) {
   const location = useLocation();
   const isViewPage = location.pathname.startsWith('/s/');
   const isAdminPage = location.pathname.startsWith('/admin');
   const { t } = useI18n();
+  const hasCustomLogo = !!(logoUrl || logoDarkUrl);
 
   if (isAdminPage) return null;
 
@@ -91,21 +112,35 @@ function Header({ appName, logoUrl }: { appName: string; logoUrl: string }) {
       bg-white/90 dark:bg-zinc-950/90 backdrop-blur-sm
       border-zinc-200/80 dark:border-zinc-800/60">
       <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2.5 group">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors
-            bg-teal-500/10 dark:bg-teal-500/10 border border-teal-500/20
-            group-hover:bg-teal-500/20 overflow-hidden">
-            {logoUrl
-              ? <img src={logoUrl} alt="Logo" className="w-5 h-5 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-              : <Shield className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-            }
-          </div>
-          <span className="font-semibold tracking-tight text-zinc-900 dark:text-white">
-            {appName || 'PSP'}
-          </span>
-          <span className="text-zinc-400 dark:text-zinc-600 text-xs font-medium hidden sm:block">
-            {t.header_tagline}
-          </span>
+        <Link to="/" className="flex items-center gap-3 group">
+          {hasCustomLogo ? (
+            <div className="h-8 flex items-center">
+              <div className="h-8 w-auto max-w-[140px] flex items-center">
+                <LogoMark logoUrl={logoUrl} logoDarkUrl={logoDarkUrl} />
+              </div>
+            </div>
+          ) : (
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors
+              bg-teal-500/10 dark:bg-teal-500/10 border border-teal-500/20
+              group-hover:bg-teal-500/20 shrink-0">
+              <Shield className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+            </div>
+          )}
+          {!hasCustomLogo && (
+            <>
+              <span className="font-semibold tracking-tight text-zinc-900 dark:text-white">
+                {appName || 'PSP'}
+              </span>
+              <span className="text-zinc-400 dark:text-zinc-600 text-xs font-medium hidden sm:block">
+                {t.header_tagline}
+              </span>
+            </>
+          )}
+          {hasCustomLogo && appName && (
+            <span className="font-semibold tracking-tight text-zinc-900 dark:text-white">
+              {appName}
+            </span>
+          )}
         </Link>
 
         <div className="flex items-center gap-1">
@@ -146,12 +181,14 @@ function AppShell() {
 
   const [appName, setAppName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [logoDarkUrl, setLogoDarkUrl] = useState('');
 
   useEffect(() => {
     loadAllSettings().then((s) => {
       applyOverrides(s);
       setAppName(s['app_name'] ?? '');
       setLogoUrl(s['logo_url'] ?? '');
+      setLogoDarkUrl(s['logo_url_dark'] ?? '');
     }).catch(() => {});
   }, [applyOverrides]);
 
@@ -164,7 +201,7 @@ function AppShell() {
         </div>
       )}
 
-      <Header appName={appName} logoUrl={logoUrl} />
+      <Header appName={appName} logoUrl={logoUrl} logoDarkUrl={logoDarkUrl} />
 
       <main className="relative">
         <Routes>
@@ -182,10 +219,10 @@ function AppShell() {
             <div className="flex items-center gap-2">
               <Shield className="w-3.5 h-3.5 text-teal-500/50" />
               <span className="text-xs text-zinc-400 dark:text-zinc-600">
-                {appName || 'PSP'} — {t.header_tagline}
+                {appName || 'PSP'} — {t.footer_tagline}
               </span>
             </div>
-            <span className="text-xs text-zinc-400 dark:text-zinc-700">{t.footer_tagline}</span>
+            <span className="text-xs text-zinc-400 dark:text-zinc-700">{t.header_e2e}</span>
           </div>
         </footer>
       )}
