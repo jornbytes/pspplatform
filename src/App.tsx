@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Shield, Sun, Moon, ChevronDown } from 'lucide-react';
-import { ThemeProvider, useTheme } from './lib/theme';
+import { ThemeProvider } from './lib/theme';
 import { I18nProvider, useI18n, LOCALES } from './lib/i18n';
 import { loadAllSettings } from './lib/admin';
 
@@ -79,31 +79,37 @@ function ThemeToggle() {
   );
 }
 
-function LogoMark({ logoUrl, logoDarkUrl }: { logoUrl: string; logoDarkUrl: string }) {
-  const { theme } = useTheme();
-  const activeUrl = theme === 'dark' && logoDarkUrl ? logoDarkUrl : logoUrl;
-
-  if (!activeUrl) {
+// logoMode: 'dark' = logo is dark-coloured (needs invert in dark mode)
+//           'light' = logo is light-coloured (needs invert in light mode)
+//           'auto'  = no filter applied
+function LogoMark({ logoUrl, logoMode }: { logoUrl: string; logoMode: string }) {
+  if (!logoUrl) {
     return <Shield className="w-5 h-5 text-teal-600 dark:text-teal-400" />;
   }
 
+  const filterClass =
+    logoMode === 'dark'
+      ? 'dark:invert dark:brightness-200'
+      : logoMode === 'light'
+      ? 'invert brightness-200 dark:invert-0 dark:brightness-100'
+      : '';
+
   return (
     <img
-      key={activeUrl}
-      src={activeUrl}
+      src={logoUrl}
       alt="Logo"
-      className="max-w-full max-h-full object-contain"
+      className={`max-w-full max-h-full object-contain transition-[filter] ${filterClass}`}
       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
     />
   );
 }
 
-function Header({ appName, logoUrl, logoDarkUrl }: { appName: string; logoUrl: string; logoDarkUrl: string }) {
+function Header({ appName, logoUrl, logoMode }: { appName: string; logoUrl: string; logoMode: string }) {
   const location = useLocation();
   const isViewPage = location.pathname.startsWith('/s/');
   const isAdminPage = location.pathname.startsWith('/admin');
   const { t } = useI18n();
-  const hasCustomLogo = !!(logoUrl || logoDarkUrl);
+  const hasCustomLogo = !!logoUrl;
 
   if (isAdminPage) return null;
 
@@ -116,7 +122,7 @@ function Header({ appName, logoUrl, logoDarkUrl }: { appName: string; logoUrl: s
           {hasCustomLogo ? (
             <div className="h-8 flex items-center">
               <div className="h-8 w-auto max-w-[140px] flex items-center">
-                <LogoMark logoUrl={logoUrl} logoDarkUrl={logoDarkUrl} />
+                <LogoMark logoUrl={logoUrl} logoMode={logoMode} />
               </div>
             </div>
           ) : (
@@ -181,14 +187,14 @@ function AppShell() {
 
   const [appName, setAppName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
-  const [logoDarkUrl, setLogoDarkUrl] = useState('');
+  const [logoMode, setLogoMode] = useState('');
 
   useEffect(() => {
     loadAllSettings().then((s) => {
       applyOverrides(s);
       setAppName(s['app_name'] ?? '');
       setLogoUrl(s['logo_url'] ?? '');
-      setLogoDarkUrl(s['logo_url_dark'] ?? '');
+      setLogoMode(s['logo_mode'] ?? 'dark');
     }).catch(() => {});
   }, [applyOverrides]);
 
@@ -201,7 +207,7 @@ function AppShell() {
         </div>
       )}
 
-      <Header appName={appName} logoUrl={logoUrl} logoDarkUrl={logoDarkUrl} />
+      <Header appName={appName} logoUrl={logoUrl} logoMode={logoMode} />
 
       <main className="relative">
         <Routes>
