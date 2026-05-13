@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useCallback } from 'react';
 
 export type Locale = 'en' | 'nl' | 'de';
 
@@ -388,24 +388,45 @@ interface I18nContextValue {
   locale: Locale;
   setLocale: (l: Locale) => void;
   t: Translations;
+  applyOverrides: (dbSettings: Record<string, string>) => void;
 }
 
 const I18nContext = createContext<I18nContextValue>({
   locale: 'en',
   setLocale: () => {},
   t: en,
+  applyOverrides: () => {},
 });
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(detectLocale);
+  const [overrides, setOverrides] = useState<Partial<Record<Locale, Partial<Translations>>>>({});
 
   const setLocale = (l: Locale) => {
     setLocaleState(l);
     localStorage.setItem('psp-locale', l);
   };
 
+  const applyOverrides = useCallback((dbSettings: Record<string, string>) => {
+    const parsed: Partial<Record<Locale, Partial<Translations>>> = {};
+    Object.entries(dbSettings).forEach(([key, value]) => {
+      const dot = key.indexOf('.');
+      if (dot === -1) return;
+      const loc = key.slice(0, dot) as Locale;
+      const k = key.slice(dot + 1) as keyof Translations;
+      if (!translations[loc]) return;
+      if (!parsed[loc]) parsed[loc] = {};
+      (parsed[loc] as Record<string, string>)[k] = value;
+    });
+    setOverrides(parsed);
+  }, []);
+
+  const base = translations[locale];
+  const localeOverrides = overrides[locale] ?? {};
+  const t = { ...base, ...localeOverrides } as Translations;
+
   return (
-    <I18nContext.Provider value={{ locale, setLocale, t: translations[locale] }}>
+    <I18nContext.Provider value={{ locale, setLocale, t, applyOverrides }}>
       {children}
     </I18nContext.Provider>
   );
