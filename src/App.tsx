@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Shield, Sun, Moon, ChevronDown } from 'lucide-react';
-import { ThemeProvider } from './lib/theme';
+import { ThemeProvider, useTheme } from './lib/theme';
 import { I18nProvider, useI18n, LOCALES } from './lib/i18n';
 import { loadAllSettings } from './lib/admin';
 
@@ -79,32 +79,63 @@ function ThemeToggle() {
   );
 }
 
-// logoMode: 'dark' = logo is dark-coloured (needs invert in dark mode)
-//           'light' = logo is light-coloured (needs invert in light mode)
-//           'auto'  = no filter applied
-function LogoMark({ logoUrl, logoMode }: { logoUrl: string; logoMode: string }) {
+function getImageLuminance(src: string): Promise<number> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 16;
+      canvas.height = 16;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(0.5); return; }
+      ctx.drawImage(img, 0, 0, 16, 16);
+      const data = ctx.getImageData(0, 0, 16, 16).data;
+      let total = 0, count = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const a = data[i + 3] / 255;
+        if (a < 0.1) continue; // skip transparent pixels
+        const r = data[i] / 255, g = data[i + 1] / 255, b = data[i + 2] / 255;
+        total += (0.299 * r + 0.587 * g + 0.114 * b) * a;
+        count++;
+      }
+      resolve(count === 0 ? 0.5 : total / count);
+    };
+    img.onerror = () => resolve(0.5);
+    img.src = src;
+  });
+}
+
+function LogoMark({ logoUrl }: { logoUrl: string }) {
+  const { theme } = useTheme();
+  const [isDark, setIsDark] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!logoUrl) return;
+    getImageLuminance(logoUrl).then((lum) => setIsDark(lum < 0.5));
+  }, [logoUrl]);
+
   if (!logoUrl) {
     return <Shield className="w-5 h-5 text-teal-600 dark:text-teal-400" />;
   }
 
-  const filterClass =
-    logoMode === 'dark'
-      ? 'dark:invert dark:brightness-200'
-      : logoMode === 'light'
-      ? 'invert brightness-200 dark:invert-0 dark:brightness-100'
-      : '';
+  // invert when logo colour clashes with background
+  const shouldInvert =
+    isDark !== null &&
+    ((isDark && theme === 'dark') || (!isDark && theme === 'light'));
 
   return (
     <img
       src={logoUrl}
       alt="Logo"
-      className={`max-w-full max-h-full object-contain transition-[filter] ${filterClass}`}
+      style={{ filter: shouldInvert ? 'invert(1) brightness(2)' : undefined }}
+      className="max-w-full max-h-full object-contain transition-[filter] duration-200"
       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
     />
   );
 }
 
-function Header({ appName, logoUrl, logoMode }: { appName: string; logoUrl: string; logoMode: string }) {
+function Header({ appName, logoUrl }: { appName: string; logoUrl: string }) {
   const location = useLocation();
   const isViewPage = location.pathname.startsWith('/s/');
   const isAdminPage = location.pathname.startsWith('/admin');
@@ -122,7 +153,7 @@ function Header({ appName, logoUrl, logoMode }: { appName: string; logoUrl: stri
           {hasCustomLogo ? (
             <div className="h-8 flex items-center">
               <div className="h-8 w-auto max-w-[140px] flex items-center">
-                <LogoMark logoUrl={logoUrl} logoMode={logoMode} />
+                <LogoMark logoUrl={logoUrl} />
               </div>
             </div>
           ) : (
@@ -187,14 +218,12 @@ function AppShell() {
 
   const [appName, setAppName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
-  const [logoMode, setLogoMode] = useState('');
 
   useEffect(() => {
     loadAllSettings().then((s) => {
       applyOverrides(s);
       setAppName(s['app_name'] ?? '');
       setLogoUrl(s['logo_url'] ?? '');
-      setLogoMode(s['logo_mode'] ?? 'dark');
     }).catch(() => {});
   }, [applyOverrides]);
 
@@ -207,7 +236,7 @@ function AppShell() {
         </div>
       )}
 
-      <Header appName={appName} logoUrl={logoUrl} logoMode={logoMode} />
+      <Header appName={appName} logoUrl={logoUrl} />
 
       <main className="relative">
         <Routes>

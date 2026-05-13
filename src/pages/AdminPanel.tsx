@@ -351,16 +351,35 @@ function TranslationsTab({ settings, onSaved }: { settings: Record<string, strin
 
 // ─── Branding Tab ─────────────────────────────────────────────────────────────
 
-const LOGO_MODES = [
-  { value: 'dark',  label: 'Donker logo',  hint: 'Donkere kleuren — wordt automatisch licht in dark mode' },
-  { value: 'light', label: 'Licht logo',   hint: 'Lichte kleuren — wordt automatisch donker in light mode' },
-  { value: 'auto',  label: 'Geen aanpassing', hint: 'Logo wordt niet aangepast door CSS' },
-] as const;
+function getImageLuminance(src: string): Promise<number> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 16; canvas.height = 16;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(0.5); return; }
+      ctx.drawImage(img, 0, 0, 16, 16);
+      const data = ctx.getImageData(0, 0, 16, 16).data;
+      let total = 0, count = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const a = data[i + 3] / 255;
+        if (a < 0.1) continue;
+        total += (0.299 * data[i] / 255 + 0.587 * data[i + 1] / 255 + 0.114 * data[i + 2] / 255) * a;
+        count++;
+      }
+      resolve(count === 0 ? 0.5 : total / count);
+    };
+    img.onerror = () => resolve(0.5);
+    img.src = src;
+  });
+}
 
 function BrandingTab({ settings, onSaved }: { settings: Record<string, string>; onSaved: () => void }) {
   const [appName, setAppName] = useState(settings['app_name'] ?? '');
   const [logoUrl, setLogoUrl] = useState(settings['logo_url'] ?? '');
-  const [logoMode, setLogoMode] = useState<string>(settings['logo_mode'] ?? 'dark');
+  const [logoIsDark, setLogoIsDark] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -368,21 +387,19 @@ function BrandingTab({ settings, onSaved }: { settings: Record<string, string>; 
   useEffect(() => {
     setAppName(settings['app_name'] ?? '');
     setLogoUrl(settings['logo_url'] ?? '');
-    setLogoMode(settings['logo_mode'] ?? 'dark');
   }, [settings]);
 
-  const filterClass =
-    logoMode === 'dark'
-      ? 'dark:invert dark:brightness-200'
-      : logoMode === 'light'
-      ? 'invert brightness-200 dark:invert-0 dark:brightness-100'
-      : '';
+  // Detect logo brightness whenever URL changes
+  useEffect(() => {
+    if (!logoUrl) { setLogoIsDark(null); return; }
+    getImageLuminance(logoUrl).then((lum) => setLogoIsDark(lum < 0.5));
+  }, [logoUrl]);
 
   const handleSave = async () => {
     setSaving(true);
     setError('');
     try {
-      await saveSettings({ app_name: appName, logo_url: logoUrl, logo_mode: logoMode });
+      await saveSettings({ app_name: appName, logo_url: logoUrl });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
       onSaved();
@@ -392,6 +409,10 @@ function BrandingTab({ settings, onSaved }: { settings: Record<string, string>; 
       setSaving(false);
     }
   };
+
+  // For preview: show how it looks in light and dark context
+  const darkModeFilter = logoIsDark === true ? 'invert(1) brightness(2)' : undefined;
+  const lightModeFilter = logoIsDark === false ? 'invert(1) brightness(2)' : undefined;
 
   return (
     <div className="max-w-lg">
@@ -417,9 +438,8 @@ function BrandingTab({ settings, onSaved }: { settings: Record<string, string>; 
       <div className="rounded-xl border p-6 mb-6 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700/50">
         <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-1">Logo</h3>
         <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-4">
-          Voer een URL in naar een afbeelding. Aanbevolen: SVG of transparante PNG. Het logo wordt automatisch aangepast voor light/dark mode via CSS.
+          Het logo wordt automatisch aangepast voor light/dark mode. Aanbevolen: SVG of transparante PNG.
         </p>
-
         <input
           type="url"
           value={logoUrl}
@@ -428,51 +448,20 @@ function BrandingTab({ settings, onSaved }: { settings: Record<string, string>; 
           className="w-full border rounded-xl px-4 py-3 text-sm transition-all focus:outline-none focus:ring-2
             bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700/50
             text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-600
-            focus:ring-teal-500/40 focus:border-teal-500/50 mb-4"
+            focus:ring-teal-500/40 focus:border-teal-500/50"
         />
 
-        {/* Mode selector */}
-        <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">Logo type</p>
-        <div className="flex flex-col gap-2 mb-4">
-          {LOGO_MODES.map((m) => (
-            <label
-              key={m.value}
-              className={`flex items-start gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-all ${
-                logoMode === m.value
-                  ? 'border-teal-500/60 bg-teal-50/60 dark:bg-teal-500/10'
-                  : 'border-zinc-200 dark:border-zinc-700/50 hover:border-zinc-300 dark:hover:border-zinc-600'
-              }`}
-            >
-              <input
-                type="radio"
-                name="logo_mode"
-                value={m.value}
-                checked={logoMode === m.value}
-                onChange={() => setLogoMode(m.value)}
-                className="mt-0.5 accent-teal-500 shrink-0"
-              />
-              <div>
-                <span className={`text-sm font-medium ${logoMode === m.value ? 'text-teal-700 dark:text-teal-400' : 'text-zinc-700 dark:text-zinc-300'}`}>
-                  {m.label}
-                </span>
-                <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">{m.hint}</p>
-              </div>
-            </label>
-          ))}
-        </div>
-
-        {/* Live preview */}
+        {/* Live dual preview */}
         {logoUrl && (
-          <div>
+          <div className="mt-4">
             <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-2">Voorbeeld:</p>
             <div className="flex gap-3">
               <div className="flex-1 rounded-xl border border-zinc-200 bg-white flex items-center justify-center p-3 h-14">
                 <img
                   src={logoUrl}
                   alt="Light preview"
-                  className={`max-h-full max-w-full object-contain transition-[filter] ${
-                    logoMode === 'light' ? 'invert brightness-200' : ''
-                  }`}
+                  style={{ filter: lightModeFilter }}
+                  className="max-h-full max-w-full object-contain transition-[filter]"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
               </div>
@@ -480,7 +469,8 @@ function BrandingTab({ settings, onSaved }: { settings: Record<string, string>; 
                 <img
                   src={logoUrl}
                   alt="Dark preview"
-                  className={`max-h-full max-w-full object-contain transition-[filter] ${filterClass}`}
+                  style={{ filter: darkModeFilter }}
+                  className="max-h-full max-w-full object-contain transition-[filter]"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
               </div>
