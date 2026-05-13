@@ -8,9 +8,9 @@ import { useI18n } from '../lib/i18n';
 import QRCodeDisplay from '../components/QRCodeDisplay';
 
 const EXPIRY_OPTIONS = [
-  { key: 'create_expiry_1h' as const, value: 1 },
   { key: 'create_expiry_24h' as const, value: 24 },
   { key: 'create_expiry_1w' as const, value: 168 },
+  { key: 'create_expiry_2w' as const, value: 336 },
   { key: 'create_expiry_30d' as const, value: 720 },
 ];
 

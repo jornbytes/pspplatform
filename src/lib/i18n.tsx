@@ -33,9 +33,9 @@ export interface Translations {
   create_label_optional: string;
   create_label_placeholder: string;
   create_expiry_label: string;
-  create_expiry_1h: string;
   create_expiry_24h: string;
   create_expiry_1w: string;
+  create_expiry_2w: string;
   create_expiry_30d: string;
   create_maxviews_label: string;
   create_passphrase_toggle: string;
@@ -128,9 +128,9 @@ const en: Translations = {
   create_label_optional: '(optional)',
   create_label_placeholder: 'e.g. Production DB password, WiFi key…',
   create_expiry_label: 'Expires after',
-  create_expiry_1h: '1 hour',
   create_expiry_24h: '24 hours',
   create_expiry_1w: '1 week',
+  create_expiry_2w: '2 weeks',
   create_expiry_30d: '30 days',
   create_maxviews_label: 'Max views',
   create_passphrase_toggle: 'Require passphrase to view',
@@ -218,9 +218,9 @@ const nl: Translations = {
   create_label_optional: '(optioneel)',
   create_label_placeholder: 'bijv. Productie DB wachtwoord, WiFi-sleutel…',
   create_expiry_label: 'Verloopt na',
-  create_expiry_1h: '1 uur',
   create_expiry_24h: '24 uur',
   create_expiry_1w: '1 week',
+  create_expiry_2w: '2 weken',
   create_expiry_30d: '30 dagen',
   create_maxviews_label: 'Max. weergaven',
   create_passphrase_toggle: 'Wachtwoordzin vereisen om te bekijken',
@@ -308,9 +308,9 @@ const de: Translations = {
   create_label_optional: '(optional)',
   create_label_placeholder: 'z. B. Produktions-DB-Passwort, WLAN-Schlüssel…',
   create_expiry_label: 'Läuft ab nach',
-  create_expiry_1h: '1 Stunde',
   create_expiry_24h: '24 Stunden',
   create_expiry_1w: '1 Woche',
+  create_expiry_2w: '2 Wochen',
   create_expiry_30d: '30 Tage',
   create_maxviews_label: 'Max. Aufrufe',
   create_passphrase_toggle: 'Passphrase zum Anzeigen erforderlich',
