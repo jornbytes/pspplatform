@@ -352,18 +352,25 @@ function TranslationsTab({ settings, onSaved }: { settings: Record<string, strin
 
 // ─── Branding Tab ─────────────────────────────────────────────────────────────
 
-function LogoPreview({ url }: { url: string }) {
+function LogoPreview({ url, logoType }: { url: string; logoType: 'light' | 'dark' }) {
+  // light logo (white) → invert in light mode to make it dark/visible
+  // dark logo (black) → invert in dark mode to make it light/visible
+  const lightModeFilter = logoType === 'light' ? 'invert(1) brightness(0.15)' : undefined;
+  const darkModeFilter = logoType === 'dark' ? 'invert(1) brightness(2)' : undefined;
+
   return (
     <div className="mt-4">
       <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-2">Voorbeeld:</p>
       <div className="flex gap-3">
         <div className="flex-1 rounded-xl border border-zinc-200 bg-white flex items-center justify-center p-4 h-16">
           <img src={url} alt="Light preview"
+            style={{ filter: lightModeFilter }}
             className="h-8 w-auto max-w-full object-contain block"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </div>
         <div className="flex-1 rounded-xl border border-zinc-700 bg-zinc-900 flex items-center justify-center p-4 h-16">
           <img src={url} alt="Dark preview"
+            style={{ filter: darkModeFilter }}
             className="h-8 w-auto max-w-full object-contain block"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </div>
@@ -376,6 +383,7 @@ function LogoPreview({ url }: { url: string }) {
 function BrandingTab({ settings, onSaved }: { settings: Record<string, string>; onSaved: () => void }) {
   const [appName, setAppName] = useState(settings['app_name'] ?? '');
   const [logoUrl, setLogoUrl] = useState(settings['logo_url'] ?? '');
+  const [logoType, setLogoType] = useState<'light' | 'dark'>((settings['logo_type'] as 'light' | 'dark') ?? 'dark');
   const [logoTab, setLogoTab] = useState<'upload' | 'url'>('upload');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
@@ -388,6 +396,7 @@ function BrandingTab({ settings, onSaved }: { settings: Record<string, string>; 
   useEffect(() => {
     setAppName(settings['app_name'] ?? '');
     setLogoUrl(settings['logo_url'] ?? '');
+    setLogoType((settings['logo_type'] as 'light' | 'dark') ?? 'dark');
   }, [settings]);
 
   const uploadFile = async (file: File) => {
@@ -423,7 +432,7 @@ function BrandingTab({ settings, onSaved }: { settings: Record<string, string>; 
     setSaving(true);
     setError('');
     try {
-      await saveSettings({ app_name: appName, logo_url: logoUrl });
+      await saveSettings({ app_name: appName, logo_url: logoUrl, logo_type: logoType });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
       onSaved();
@@ -458,8 +467,36 @@ function BrandingTab({ settings, onSaved }: { settings: Record<string, string>; 
       <div className="rounded-xl border p-6 mb-6 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700/50">
         <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-1">Logo</h3>
         <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-4">
-          Het logo wordt automatisch aangepast voor light/dark mode. Aanbevolen: SVG of transparante PNG.
+          Aanbevolen: SVG of transparante PNG. Geef aan of het een licht of donker logo is zodat het in beide modi zichtbaar is.
         </p>
+
+        {/* Logo type selector */}
+        <div className="mb-4">
+          <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2">Logo kleur</p>
+          <div className="flex gap-2">
+            {(['dark', 'light'] as const).map((type) => (
+              <button
+                key={type}
+                onClick={() => setLogoType(type)}
+                className={`flex-1 flex flex-col items-center gap-2 px-3 py-3 rounded-xl border text-xs font-medium transition-all ${
+                  logoType === type
+                    ? 'border-teal-500 bg-teal-50 dark:bg-teal-500/10 text-teal-700 dark:text-teal-400'
+                    : 'border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
+                }`}
+              >
+                <div className={`w-16 h-8 rounded-lg flex items-center justify-center ${
+                  type === 'dark' ? 'bg-white border border-zinc-200' : 'bg-zinc-900 border border-zinc-700'
+                }`}>
+                  <div className={`w-10 h-3 rounded-sm ${type === 'dark' ? 'bg-zinc-800' : 'bg-white'}`} />
+                </div>
+                <span>{type === 'dark' ? 'Donker logo' : 'Licht logo'}</span>
+                <span className="text-zinc-400 dark:text-zinc-500 font-normal">
+                  {type === 'dark' ? 'zwart / donkere kleuren' : 'wit / lichte kleuren'}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Tab switcher */}
         <div className="flex gap-1 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800 mb-4 w-fit">
@@ -536,7 +573,7 @@ function BrandingTab({ settings, onSaved }: { settings: Record<string, string>; 
           </div>
         )}
 
-        {logoUrl && <LogoPreview url={logoUrl} />}
+        {logoUrl && <LogoPreview url={logoUrl} logoType={logoType} />}
       </div>
 
       {error && (

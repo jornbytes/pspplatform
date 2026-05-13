@@ -79,27 +79,38 @@ function ThemeToggle() {
   );
 }
 
-function LogoMark({ logoUrl }: { logoUrl: string }) {
+function LogoMark({ logoUrl, logoType }: { logoUrl: string; logoType: 'light' | 'dark' }) {
   if (!logoUrl) {
     return <Shield className="w-5 h-5 text-teal-600 dark:text-teal-400" />;
   }
 
+  // light logo (white/pale) → invert in light mode so it becomes dark and visible on white bg
+  // dark logo (black/dark)  → invert in dark mode so it becomes light and visible on dark bg
+  // We use two separate <img> tags (one per mode) so we can apply static Tailwind classes
+  // without needing JS to detect the current theme.
   return (
-    <img
-      src={logoUrl}
-      alt="Logo"
-      className="h-8 w-auto max-w-[160px] object-contain block"
-      onError={(e) => {
-        const el = e.target as HTMLImageElement;
-        el.style.display = 'none';
-        const fallback = el.parentElement?.querySelector('.logo-fallback') as HTMLElement | null;
-        if (fallback) fallback.style.display = 'flex';
-      }}
-    />
+    <>
+      {/* Shown in light mode */}
+      <img
+        src={logoUrl}
+        alt="Logo"
+        style={logoType === 'light' ? { filter: 'invert(1) brightness(0.1)' } : undefined}
+        className="h-8 w-auto max-w-[160px] object-contain block dark:hidden"
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+      {/* Shown in dark mode */}
+      <img
+        src={logoUrl}
+        alt="Logo"
+        style={logoType === 'dark' ? { filter: 'invert(1) brightness(2)' } : undefined}
+        className="h-8 w-auto max-w-[160px] object-contain hidden dark:block"
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+    </>
   );
 }
 
-function Header({ appName, logoUrl }: { appName: string; logoUrl: string }) {
+function Header({ appName, logoUrl, logoType }: { appName: string; logoUrl: string; logoType: 'light' | 'dark' }) {
   const location = useLocation();
   const isViewPage = location.pathname.startsWith('/s/');
   const isAdminPage = location.pathname.startsWith('/admin');
@@ -116,7 +127,7 @@ function Header({ appName, logoUrl }: { appName: string; logoUrl: string }) {
         <Link to="/" className="flex items-center gap-3 group">
           {hasCustomLogo ? (
             <div className="flex items-center h-8">
-              <LogoMark logoUrl={logoUrl} />
+              <LogoMark logoUrl={logoUrl} logoType={logoType} />
               <div className="logo-fallback hidden w-8 h-8 rounded-lg items-center justify-center
                 bg-teal-500/10 border border-teal-500/20">
                 <Shield className="w-5 h-5 text-teal-600 dark:text-teal-400" />
@@ -184,12 +195,14 @@ function AppShell() {
 
   const [appName, setAppName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [logoType, setLogoType] = useState<'light' | 'dark'>('dark');
 
   useEffect(() => {
     loadAllSettings().then((s) => {
       applyOverrides(s);
       setAppName(s['app_name'] ?? '');
       setLogoUrl(s['logo_url'] ?? '');
+      setLogoType((s['logo_type'] as 'light' | 'dark') ?? 'dark');
     }).catch(() => {});
   }, [applyOverrides]);
 
@@ -202,7 +215,7 @@ function AppShell() {
         </div>
       )}
 
-      <Header appName={appName} logoUrl={logoUrl} />
+      <Header appName={appName} logoUrl={logoUrl} logoType={logoType} />
 
       <main className="relative">
         <Routes>
