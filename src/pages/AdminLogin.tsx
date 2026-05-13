@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Eye, EyeOff, Lock } from 'lucide-react';
+import { Shield, Eye, EyeOff, Lock, UserPlus, LogIn } from 'lucide-react';
 import { adminLogin, adminSetup, hasAdminSetup, getAdminToken, verifyAdminToken } from '../lib/admin';
+
+type Mode = 'login' | 'register';
 
 export default function AdminLogin() {
   const navigate = useNavigate();
+  const [mode, setMode] = useState<Mode>('login');
+  const [adminExists, setAdminExists] = useState<boolean | null>(null);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [showPw, setShowPw] = useState(false);
-  const [isSetup, setIsSetup] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -20,22 +22,24 @@ export default function AdminLogin() {
         navigate('/admin', { replace: true });
         return;
       }
-      const setup = await hasAdminSetup();
-      setIsSetup(!setup);
-      setLoading(false);
+      const exists = await hasAdminSetup();
+      setAdminExists(exists);
+      setMode(exists ? 'login' : 'register');
     })();
   }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (isSetup) {
+
+    if (mode === 'register') {
       if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
       if (password !== confirm) { setError('Passwords do not match.'); return; }
     }
+
     setSubmitting(true);
     try {
-      if (isSetup) {
+      if (mode === 'register') {
         const res = await adminSetup(password);
         if ('error' in res) { setError(res.error); return; }
       }
@@ -47,7 +51,14 @@ export default function AdminLogin() {
     }
   };
 
-  if (loading) {
+  const switchMode = (m: Mode) => {
+    setMode(m);
+    setError('');
+    setPassword('');
+    setConfirm('');
+  };
+
+  if (adminExists === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
         <div className="w-5 h-5 border-2 border-teal-500/30 border-t-teal-500 rounded-full animate-spin" />
@@ -55,32 +66,67 @@ export default function AdminLogin() {
     );
   }
 
+  const isRegister = mode === 'register';
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 px-4">
       <div className="w-full max-w-sm">
+        {/* Icon + heading */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4
             bg-teal-500/10 border border-teal-500/20">
             <Shield className="w-6 h-6 text-teal-500" />
           </div>
           <h1 className="text-xl font-semibold text-zinc-900 dark:text-white mb-1">
-            {isSetup ? 'Set up admin account' : 'Admin panel'}
+            Admin panel
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            {isSetup
-              ? 'Create a password to protect the admin panel.'
-              : 'Enter your admin password to continue.'}
+            {isRegister
+              ? 'Create the first admin account to get started.'
+              : 'Sign in to manage your application.'}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="rounded-2xl border p-6 shadow-sm
-          bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700/50">
+        {/* Tab switcher — only show if an admin already exists (register is then optional) */}
+        {adminExists && (
+          <div className="flex mb-6 rounded-xl p-1 border gap-1
+            bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700/50">
+            {([['login', 'Log in', LogIn], ['register', 'Register', UserPlus]] as const).map(([m, label, Icon]) => (
+              <button
+                key={m}
+                onClick={() => switchMode(m)}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${
+                  mode === m
+                    ? 'bg-teal-500 text-white dark:text-zinc-900 shadow-sm'
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* No admin yet — show a notice */}
+        {!adminExists && (
+          <div className="mb-5 px-4 py-3 rounded-xl border text-sm
+            bg-teal-50 dark:bg-teal-500/10 border-teal-200 dark:border-teal-500/20
+            text-teal-700 dark:text-teal-400">
+            No admin account exists yet. The first person to register will become the administrator.
+          </div>
+        )}
+
+        <form
+          onSubmit={handleSubmit}
+          className="rounded-2xl border p-6 shadow-sm
+            bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700/50"
+        >
+          {/* Password field */}
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-2 text-zinc-700 dark:text-zinc-300">
-              <div className="flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-zinc-400" />
-                Password
-              </div>
+            <label className="flex items-center gap-1.5 text-sm font-medium mb-2 text-zinc-700 dark:text-zinc-300">
+              <Lock className="w-3.5 h-3.5 text-zinc-400" />
+              Password
             </label>
             <div className="relative">
               <input
@@ -102,11 +148,16 @@ export default function AdminLogin() {
                 {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+            {isRegister && (
+              <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1.5">Minimum 8 characters.</p>
+            )}
           </div>
 
-          {isSetup && (
+          {/* Confirm field — only for register */}
+          {isRegister && (
             <div className="mb-4">
-              <label className="block text-sm font-medium mb-2 text-zinc-700 dark:text-zinc-300">
+              <label className="flex items-center gap-1.5 text-sm font-medium mb-2 text-zinc-700 dark:text-zinc-300">
+                <Lock className="w-3.5 h-3.5 text-zinc-400" />
                 Confirm password
               </label>
               <input
@@ -133,15 +184,26 @@ export default function AdminLogin() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-3 rounded-xl font-semibold text-sm transition-all
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all
               bg-teal-500 hover:bg-teal-400 disabled:opacity-50 disabled:cursor-not-allowed
               text-white dark:text-zinc-900 shadow-lg shadow-teal-500/20"
           >
+            {isRegister
+              ? <UserPlus className="w-4 h-4" />
+              : <LogIn className="w-4 h-4" />
+            }
             {submitting
-              ? (isSetup ? 'Setting up…' : 'Logging in…')
-              : (isSetup ? 'Create admin account' : 'Log in')}
+              ? (isRegister ? 'Creating account…' : 'Signing in…')
+              : (isRegister ? 'Create admin account' : 'Sign in')}
           </button>
         </form>
+
+        {/* Footer note */}
+        <p className="text-center text-xs text-zinc-400 dark:text-zinc-600 mt-5">
+          {isRegister
+            ? 'Only one admin account is supported.'
+            : 'Access restricted to administrators only.'}
+        </p>
       </div>
     </div>
   );
