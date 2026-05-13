@@ -352,54 +352,19 @@ function TranslationsTab({ settings, onSaved }: { settings: Record<string, strin
 
 // ─── Branding Tab ─────────────────────────────────────────────────────────────
 
-function getImageLuminance(src: string): Promise<number> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 16; canvas.height = 16;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { resolve(0.5); return; }
-      ctx.drawImage(img, 0, 0, 16, 16);
-      const data = ctx.getImageData(0, 0, 16, 16).data;
-      let total = 0, count = 0;
-      for (let i = 0; i < data.length; i += 4) {
-        const a = data[i + 3] / 255;
-        if (a < 0.1) continue;
-        total += (0.299 * data[i] / 255 + 0.587 * data[i + 1] / 255 + 0.114 * data[i + 2] / 255) * a;
-        count++;
-      }
-      resolve(count === 0 ? 0.5 : total / count);
-    };
-    img.onerror = () => resolve(0.5);
-    img.src = src;
-  });
-}
-
 function LogoPreview({ url }: { url: string }) {
-  const [logoIsDark, setLogoIsDark] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    if (!url) { setLogoIsDark(null); return; }
-    getImageLuminance(url).then((lum) => setLogoIsDark(lum < 0.5));
-  }, [url]);
-
-  const darkFilter = logoIsDark === true ? 'invert(1) brightness(2)' : undefined;
-  const lightFilter = logoIsDark === false ? 'invert(1) brightness(2)' : undefined;
-
   return (
     <div className="mt-4">
       <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-2">Voorbeeld:</p>
       <div className="flex gap-3">
-        <div className="flex-1 rounded-xl border border-zinc-200 bg-white flex items-center justify-center p-3 h-14">
-          <img src={url} alt="Light" style={{ filter: lightFilter }}
-            className="max-h-full max-w-full object-contain transition-[filter]"
+        <div className="flex-1 rounded-xl border border-zinc-200 bg-white flex items-center justify-center p-4 h-16">
+          <img src={url} alt="Light preview"
+            className="h-8 w-auto max-w-full object-contain block"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </div>
-        <div className="flex-1 rounded-xl border border-zinc-700 bg-zinc-900 flex items-center justify-center p-3 h-14">
-          <img src={url} alt="Dark" style={{ filter: darkFilter }}
-            className="max-h-full max-w-full object-contain transition-[filter]"
+        <div className="flex-1 rounded-xl border border-zinc-700 bg-zinc-900 flex items-center justify-center p-4 h-16">
+          <img src={url} alt="Dark preview"
+            className="h-8 w-auto max-w-full object-contain block"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </div>
       </div>

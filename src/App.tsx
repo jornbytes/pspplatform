@@ -84,19 +84,18 @@ function LogoMark({ logoUrl }: { logoUrl: string }) {
     return <Shield className="w-5 h-5 text-teal-600 dark:text-teal-400" />;
   }
 
-  // mix-blend-mode: multiply hides white in light mode (white bg × white logo = white → invisible,
-  // dark logo on white bg stays visible). In dark mode, screen does the inverse.
-  // This is pure CSS — no CORS canvas needed, works for any logo.
   return (
-    <picture>
-      <img
-        src={logoUrl}
-        alt="Logo"
-        className="max-w-full max-h-full object-contain
-          [mix-blend-mode:multiply] dark:[mix-blend-mode:screen]"
-        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-      />
-    </picture>
+    <img
+      src={logoUrl}
+      alt="Logo"
+      className="h-8 w-auto max-w-[160px] object-contain block"
+      onError={(e) => {
+        const el = e.target as HTMLImageElement;
+        el.style.display = 'none';
+        const fallback = el.parentElement?.querySelector('.logo-fallback') as HTMLElement | null;
+        if (fallback) fallback.style.display = 'flex';
+      }}
+    />
   );
 }
 
@@ -116,9 +115,11 @@ function Header({ appName, logoUrl }: { appName: string; logoUrl: string }) {
       <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3 group">
           {hasCustomLogo ? (
-            <div className="h-8 flex items-center">
-              <div className="h-8 w-auto max-w-[140px] flex items-center">
-                <LogoMark logoUrl={logoUrl} />
+            <div className="flex items-center h-8">
+              <LogoMark logoUrl={logoUrl} />
+              <div className="logo-fallback hidden w-8 h-8 rounded-lg items-center justify-center
+                bg-teal-500/10 border border-teal-500/20">
+                <Shield className="w-5 h-5 text-teal-600 dark:text-teal-400" />
               </div>
             </div>
           ) : (
