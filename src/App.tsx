@@ -79,30 +79,21 @@ function ThemeToggle() {
   );
 }
 
-function LogoMark({ logoUrl, logoType }: { logoUrl: string; logoType: 'light' | 'dark' }) {
-  if (!logoUrl) {
+function LogoMark({ logoUrl, logoUrlDark }: { logoUrl: string; logoUrlDark: string }) {
+  if (!logoUrl && !logoUrlDark) {
     return <Shield className="w-5 h-5 text-teal-600 dark:text-teal-400" />;
   }
 
-  // light logo (white/pale) → invert in light mode so it becomes dark and visible on white bg
-  // dark logo (black/dark)  → invert in dark mode so it becomes light and visible on dark bg
-  // We use two separate <img> tags (one per mode) so we can apply static Tailwind classes
-  // without needing JS to detect the current theme.
+  const lightSrc = logoUrl || logoUrlDark;
+  const darkSrc = logoUrlDark || logoUrl;
+
   return (
     <>
-      {/* Shown in light mode */}
-      <img
-        src={logoUrl}
-        alt="Logo"
-        style={logoType === 'light' ? { filter: 'invert(1) brightness(0.1)' } : undefined}
+      <img src={lightSrc} alt="Logo"
         className="h-8 w-auto max-w-[160px] object-contain block dark:hidden"
         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
       />
-      {/* Shown in dark mode */}
-      <img
-        src={logoUrl}
-        alt="Logo"
-        style={logoType === 'dark' ? { filter: 'invert(1) brightness(2)' } : undefined}
+      <img src={darkSrc} alt="Logo"
         className="h-8 w-auto max-w-[160px] object-contain hidden dark:block"
         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
       />
@@ -110,12 +101,12 @@ function LogoMark({ logoUrl, logoType }: { logoUrl: string; logoType: 'light' | 
   );
 }
 
-function Header({ appName, logoUrl, logoType }: { appName: string; logoUrl: string; logoType: 'light' | 'dark' }) {
+function Header({ appName, logoUrl, logoUrlDark }: { appName: string; logoUrl: string; logoUrlDark: string }) {
   const location = useLocation();
   const isViewPage = location.pathname.startsWith('/s/');
   const isAdminPage = location.pathname.startsWith('/admin');
   const { t } = useI18n();
-  const hasCustomLogo = !!logoUrl;
+  const hasCustomLogo = !!(logoUrl || logoUrlDark);
 
   if (isAdminPage) return null;
 
@@ -127,7 +118,7 @@ function Header({ appName, logoUrl, logoType }: { appName: string; logoUrl: stri
         <Link to="/" className="flex items-center gap-3 group">
           {hasCustomLogo ? (
             <div className="flex items-center h-8">
-              <LogoMark logoUrl={logoUrl} logoType={logoType} />
+              <LogoMark logoUrl={logoUrl} logoUrlDark={logoUrlDark} />
               <div className="logo-fallback hidden w-8 h-8 rounded-lg items-center justify-center
                 bg-teal-500/10 border border-teal-500/20">
                 <Shield className="w-5 h-5 text-teal-600 dark:text-teal-400" />
@@ -195,14 +186,14 @@ function AppShell() {
 
   const [appName, setAppName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
-  const [logoType, setLogoType] = useState<'light' | 'dark'>('dark');
+  const [logoUrlDark, setLogoUrlDark] = useState('');
 
   useEffect(() => {
     loadAllSettings().then((s) => {
       applyOverrides(s);
       setAppName(s['app_name'] ?? '');
       setLogoUrl(s['logo_url'] ?? '');
-      setLogoType((s['logo_type'] as 'light' | 'dark') ?? 'dark');
+      setLogoUrlDark(s['logo_url_dark'] ?? '');
     }).catch(() => {});
   }, [applyOverrides]);
 
@@ -215,7 +206,7 @@ function AppShell() {
         </div>
       )}
 
-      <Header appName={appName} logoUrl={logoUrl} logoType={logoType} />
+      <Header appName={appName} logoUrl={logoUrl} logoUrlDark={logoUrlDark} />
 
       <main className="relative">
         <Routes>

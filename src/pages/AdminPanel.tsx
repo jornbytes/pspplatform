@@ -352,63 +352,37 @@ function TranslationsTab({ settings, onSaved }: { settings: Record<string, strin
 
 // ─── Branding Tab ─────────────────────────────────────────────────────────────
 
-function LogoPreview({ url, logoType }: { url: string; logoType: 'light' | 'dark' }) {
-  // light logo (white) → invert in light mode to make it dark/visible
-  // dark logo (black) → invert in dark mode to make it light/visible
-  const lightModeFilter = logoType === 'light' ? 'invert(1) brightness(0.15)' : undefined;
-  const darkModeFilter = logoType === 'dark' ? 'invert(1) brightness(2)' : undefined;
+type LogoSlot = 'light' | 'dark';
 
-  return (
-    <div className="mt-4">
-      <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-2">Voorbeeld:</p>
-      <div className="flex gap-3">
-        <div className="flex-1 rounded-xl border border-zinc-200 bg-white flex items-center justify-center p-4 h-16">
-          <img src={url} alt="Light preview"
-            style={{ filter: lightModeFilter }}
-            className="h-8 w-auto max-w-full object-contain block"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-        </div>
-        <div className="flex-1 rounded-xl border border-zinc-700 bg-zinc-900 flex items-center justify-center p-4 h-16">
-          <img src={url} alt="Dark preview"
-            style={{ filter: darkModeFilter }}
-            className="h-8 w-auto max-w-full object-contain block"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-        </div>
-      </div>
-      <p className="text-xs text-zinc-400 mt-1.5">Links: light mode &nbsp;·&nbsp; Rechts: dark mode</p>
-    </div>
-  );
-}
-
-function BrandingTab({ settings, onSaved }: { settings: Record<string, string>; onSaved: () => void }) {
-  const [appName, setAppName] = useState(settings['app_name'] ?? '');
-  const [logoUrl, setLogoUrl] = useState(settings['logo_url'] ?? '');
-  const [logoType, setLogoType] = useState<'light' | 'dark'>((settings['logo_type'] as 'light' | 'dark') ?? 'dark');
-  const [logoTab, setLogoTab] = useState<'upload' | 'url'>('upload');
+function LogoUploader({
+  slot,
+  url,
+  onUrl,
+}: {
+  slot: LogoSlot;
+  url: string;
+  onUrl: (url: string) => void;
+}) {
+  const [tab, setTab] = useState<'upload' | 'url'>('upload');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [dragOver, setDragOver] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    setAppName(settings['app_name'] ?? '');
-    setLogoUrl(settings['logo_url'] ?? '');
-    setLogoType((settings['logo_type'] as 'light' | 'dark') ?? 'dark');
-  }, [settings]);
+  const bgClass = slot === 'light' ? 'bg-white border-zinc-200' : 'bg-zinc-900 border-zinc-700';
+  const label = slot === 'light' ? 'Light mode logo' : 'Dark mode logo';
+  const hint = slot === 'light' ? 'Zichtbaar op witte achtergrond' : 'Zichtbaar op donkere achtergrond';
 
   const uploadFile = async (file: File) => {
     setUploading(true);
     setUploadError('');
     try {
       const ext = file.name.split('.').pop() ?? 'png';
-      const path = `logo-${Date.now()}.${ext}`;
+      const path = `logo-${slot}-${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from('logos').upload(path, file, { upsert: true });
       if (upErr) throw upErr;
       const { data } = supabase.storage.from('logos').getPublicUrl(path);
-      setLogoUrl(data.publicUrl);
+      onUrl(data.publicUrl);
     } catch (e: unknown) {
       setUploadError(e instanceof Error ? e.message : 'Upload mislukt.');
     } finally {
@@ -416,23 +390,111 @@ function BrandingTab({ settings, onSaved }: { settings: Record<string, string>; 
     }
   };
 
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) uploadFile(file);
-  };
+  return (
+    <div className={`rounded-xl border p-4 ${slot === 'light' ? 'border-zinc-200 dark:border-zinc-700/50' : 'border-zinc-700/50 dark:border-zinc-600/50'}`}>
+      {/* Header row with preview */}
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{label}</p>
+          <p className="text-xs text-zinc-400 dark:text-zinc-500">{hint}</p>
+        </div>
+        <div className={`w-20 h-10 rounded-lg border flex items-center justify-center p-1.5 shrink-0 ${bgClass}`}>
+          {url
+            ? <img src={url} alt="" className="h-full w-auto max-w-full object-contain"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            : <span className="text-zinc-300 dark:text-zinc-600 text-xs">–</span>
+          }
+        </div>
+      </div>
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) uploadFile(file);
-  };
+      {/* Tab switcher */}
+      <div className="flex gap-1 p-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 mb-3 w-fit">
+        {(['upload', 'url'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+              tab === t
+                ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm'
+                : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'
+            }`}
+          >
+            {t === 'upload' ? <Upload className="w-3 h-3" /> : <Link className="w-3 h-3" />}
+            {t === 'upload' ? 'Upload' : 'URL'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'upload' ? (
+        <div>
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); }} />
+          <div
+            onClick={() => !uploading && fileInputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files?.[0]; if (f) uploadFile(f); }}
+            className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-xl py-4 px-3 cursor-pointer transition-all text-sm ${
+              dragOver
+                ? 'border-teal-500 bg-teal-50/50 dark:bg-teal-500/10'
+                : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+            } ${uploading ? 'pointer-events-none opacity-60' : ''}`}
+          >
+            {uploading
+              ? <><Loader2 className="w-4 h-4 text-teal-500 animate-spin shrink-0" /><span className="text-zinc-500 dark:text-zinc-400">Uploaden...</span></>
+              : <><Upload className="w-4 h-4 text-zinc-400 shrink-0" /><span className="text-zinc-500 dark:text-zinc-400">Klik of sleep hier</span></>
+            }
+          </div>
+          {uploadError && (
+            <p className="mt-1.5 text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3 shrink-0" />{uploadError}
+            </p>
+          )}
+        </div>
+      ) : (
+        <input
+          type="url"
+          value={url}
+          onChange={(e) => onUrl(e.target.value)}
+          placeholder="https://example.com/logo.png"
+          className="w-full border rounded-xl px-3 py-2.5 text-xs transition-all focus:outline-none focus:ring-2
+            bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700/50
+            text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-600
+            focus:ring-teal-500/40 focus:border-teal-500/50"
+        />
+      )}
+
+      {url && (
+        <div className="mt-2 flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-700/50">
+          <span className="text-xs text-zinc-400 dark:text-zinc-500 truncate flex-1 font-mono">{url}</span>
+          <button onClick={() => onUrl('')} className="text-zinc-400 hover:text-red-500 transition-colors shrink-0">
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BrandingTab({ settings, onSaved }: { settings: Record<string, string>; onSaved: () => void }) {
+  const [appName, setAppName] = useState(settings['app_name'] ?? '');
+  const [logoUrlLight, setLogoUrlLight] = useState(settings['logo_url'] ?? '');
+  const [logoUrlDark, setLogoUrlDark] = useState(settings['logo_url_dark'] ?? '');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setAppName(settings['app_name'] ?? '');
+    setLogoUrlLight(settings['logo_url'] ?? '');
+    setLogoUrlDark(settings['logo_url_dark'] ?? '');
+  }, [settings]);
 
   const handleSave = async () => {
     setSaving(true);
     setError('');
     try {
-      await saveSettings({ app_name: appName, logo_url: logoUrl, logo_type: logoType });
+      await saveSettings({ app_name: appName, logo_url: logoUrlLight, logo_url_dark: logoUrlDark });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
       onSaved();
@@ -467,113 +529,13 @@ function BrandingTab({ settings, onSaved }: { settings: Record<string, string>; 
       <div className="rounded-xl border p-6 mb-6 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700/50">
         <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-1">Logo</h3>
         <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-4">
-          Aanbevolen: SVG of transparante PNG. Geef aan of het een licht of donker logo is zodat het in beide modi zichtbaar is.
+          Upload aparte logo's voor light en dark mode. Aanbevolen: SVG of transparante PNG.
         </p>
 
-        {/* Logo type selector */}
-        <div className="mb-4">
-          <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2">Logo kleur</p>
-          <div className="flex gap-2">
-            {(['dark', 'light'] as const).map((type) => (
-              <button
-                key={type}
-                onClick={() => setLogoType(type)}
-                className={`flex-1 flex flex-col items-center gap-2 px-3 py-3 rounded-xl border text-xs font-medium transition-all ${
-                  logoType === type
-                    ? 'border-teal-500 bg-teal-50 dark:bg-teal-500/10 text-teal-700 dark:text-teal-400'
-                    : 'border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
-                }`}
-              >
-                <div className={`w-16 h-8 rounded-lg flex items-center justify-center ${
-                  type === 'dark' ? 'bg-white border border-zinc-200' : 'bg-zinc-900 border border-zinc-700'
-                }`}>
-                  <div className={`w-10 h-3 rounded-sm ${type === 'dark' ? 'bg-zinc-800' : 'bg-white'}`} />
-                </div>
-                <span>{type === 'dark' ? 'Donker logo' : 'Licht logo'}</span>
-                <span className="text-zinc-400 dark:text-zinc-500 font-normal">
-                  {type === 'dark' ? 'zwart / donkere kleuren' : 'wit / lichte kleuren'}
-                </span>
-              </button>
-            ))}
-          </div>
+        <div className="flex flex-col gap-4">
+          <LogoUploader slot="light" url={logoUrlLight} onUrl={setLogoUrlLight} />
+          <LogoUploader slot="dark" url={logoUrlDark} onUrl={setLogoUrlDark} />
         </div>
-
-        {/* Tab switcher */}
-        <div className="flex gap-1 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800 mb-4 w-fit">
-          {(['upload', 'url'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setLogoTab(tab)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                logoTab === tab
-                  ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm'
-                  : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'
-              }`}
-            >
-              {tab === 'upload' ? <Upload className="w-3 h-3" /> : <Link className="w-3 h-3" />}
-              {tab === 'upload' ? 'Uploaden' : 'URL'}
-            </button>
-          ))}
-        </div>
-
-        {logoTab === 'upload' ? (
-          <div>
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileInput} />
-            <div
-              onClick={() => !uploading && fileInputRef.current?.click()}
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={handleDrop}
-              className={`relative flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-8 cursor-pointer transition-all ${
-                dragOver
-                  ? 'border-teal-500 bg-teal-50/50 dark:bg-teal-500/10'
-                  : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
-              } ${uploading ? 'pointer-events-none opacity-70' : ''}`}
-            >
-              {uploading ? (
-                <Loader2 className="w-6 h-6 text-teal-500 animate-spin" />
-              ) : (
-                <Upload className="w-6 h-6 text-zinc-400" />
-              )}
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                {uploading ? 'Uploaden...' : 'Klik of sleep een afbeelding hierheen'}
-              </p>
-              <p className="text-xs text-zinc-400 dark:text-zinc-500">PNG, JPG, SVG, WebP — max 2 MB</p>
-            </div>
-            {uploadError && (
-              <p className="mt-2 text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3 shrink-0" />{uploadError}
-              </p>
-            )}
-          </div>
-        ) : (
-          <input
-            type="url"
-            value={logoUrl}
-            onChange={(e) => setLogoUrl(e.target.value)}
-            placeholder="https://example.com/logo.png"
-            className="w-full border rounded-xl px-4 py-3 text-sm transition-all focus:outline-none focus:ring-2
-              bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700/50
-              text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-600
-              focus:ring-teal-500/40 focus:border-teal-500/50"
-          />
-        )}
-
-        {/* Current logo + clear */}
-        {logoUrl && (
-          <div className="mt-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-700/50">
-            <div className="w-8 h-8 rounded bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 flex items-center justify-center p-1 shrink-0">
-              <img src={logoUrl} alt="" className="max-w-full max-h-full object-contain"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-            </div>
-            <span className="text-xs text-zinc-500 dark:text-zinc-400 truncate flex-1 font-mono">{logoUrl}</span>
-            <button onClick={() => setLogoUrl('')} className="text-zinc-400 hover:text-red-500 transition-colors shrink-0">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
-
-        {logoUrl && <LogoPreview url={logoUrl} logoType={logoType} />}
       </div>
 
       {error && (
