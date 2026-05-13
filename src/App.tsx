@@ -79,59 +79,24 @@ function ThemeToggle() {
   );
 }
 
-function getImageLuminance(src: string): Promise<number> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 16;
-      canvas.height = 16;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { resolve(0.5); return; }
-      ctx.drawImage(img, 0, 0, 16, 16);
-      const data = ctx.getImageData(0, 0, 16, 16).data;
-      let total = 0, count = 0;
-      for (let i = 0; i < data.length; i += 4) {
-        const a = data[i + 3] / 255;
-        if (a < 0.1) continue; // skip transparent pixels
-        const r = data[i] / 255, g = data[i + 1] / 255, b = data[i + 2] / 255;
-        total += (0.299 * r + 0.587 * g + 0.114 * b) * a;
-        count++;
-      }
-      resolve(count === 0 ? 0.5 : total / count);
-    };
-    img.onerror = () => resolve(0.5);
-    img.src = src;
-  });
-}
-
 function LogoMark({ logoUrl }: { logoUrl: string }) {
-  const { theme } = useTheme();
-  const [isDark, setIsDark] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    if (!logoUrl) return;
-    getImageLuminance(logoUrl).then((lum) => setIsDark(lum < 0.5));
-  }, [logoUrl]);
-
   if (!logoUrl) {
     return <Shield className="w-5 h-5 text-teal-600 dark:text-teal-400" />;
   }
 
-  // invert when logo colour clashes with background
-  const shouldInvert =
-    isDark !== null &&
-    ((isDark && theme === 'dark') || (!isDark && theme === 'light'));
-
+  // mix-blend-mode: multiply hides white in light mode (white bg × white logo = white → invisible,
+  // dark logo on white bg stays visible). In dark mode, screen does the inverse.
+  // This is pure CSS — no CORS canvas needed, works for any logo.
   return (
-    <img
-      src={logoUrl}
-      alt="Logo"
-      style={{ filter: shouldInvert ? 'invert(1) brightness(2)' : undefined }}
-      className="max-w-full max-h-full object-contain transition-[filter] duration-200"
-      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-    />
+    <picture>
+      <img
+        src={logoUrl}
+        alt="Logo"
+        className="max-w-full max-h-full object-contain
+          [mix-blend-mode:multiply] dark:[mix-blend-mode:screen]"
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+    </picture>
   );
 }
 

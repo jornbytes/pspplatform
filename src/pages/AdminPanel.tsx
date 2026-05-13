@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Shield, LogOut, BarChart2, Languages, Image, Check, AlertCircle,
   RefreshCw, Eye, Clock, Database, TrendingUp, ChevronDown, ChevronUp, Save,
+  Upload, Link, X, Loader2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { loadAllSettings, saveSettings, getAdminToken, verifyAdminToken, clearAdminToken } from '../lib/admin';
@@ -376,24 +377,82 @@ function getImageLuminance(src: string): Promise<number> {
   });
 }
 
+function LogoPreview({ url }: { url: string }) {
+  const [logoIsDark, setLogoIsDark] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!url) { setLogoIsDark(null); return; }
+    getImageLuminance(url).then((lum) => setLogoIsDark(lum < 0.5));
+  }, [url]);
+
+  const darkFilter = logoIsDark === true ? 'invert(1) brightness(2)' : undefined;
+  const lightFilter = logoIsDark === false ? 'invert(1) brightness(2)' : undefined;
+
+  return (
+    <div className="mt-4">
+      <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-2">Voorbeeld:</p>
+      <div className="flex gap-3">
+        <div className="flex-1 rounded-xl border border-zinc-200 bg-white flex items-center justify-center p-3 h-14">
+          <img src={url} alt="Light" style={{ filter: lightFilter }}
+            className="max-h-full max-w-full object-contain transition-[filter]"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+        </div>
+        <div className="flex-1 rounded-xl border border-zinc-700 bg-zinc-900 flex items-center justify-center p-3 h-14">
+          <img src={url} alt="Dark" style={{ filter: darkFilter }}
+            className="max-h-full max-w-full object-contain transition-[filter]"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+        </div>
+      </div>
+      <p className="text-xs text-zinc-400 mt-1.5">Links: light mode &nbsp;·&nbsp; Rechts: dark mode</p>
+    </div>
+  );
+}
+
 function BrandingTab({ settings, onSaved }: { settings: Record<string, string>; onSaved: () => void }) {
   const [appName, setAppName] = useState(settings['app_name'] ?? '');
   const [logoUrl, setLogoUrl] = useState(settings['logo_url'] ?? '');
-  const [logoIsDark, setLogoIsDark] = useState<boolean | null>(null);
+  const [logoTab, setLogoTab] = useState<'upload' | 'url'>('upload');
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [dragOver, setDragOver] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setAppName(settings['app_name'] ?? '');
     setLogoUrl(settings['logo_url'] ?? '');
   }, [settings]);
 
-  // Detect logo brightness whenever URL changes
-  useEffect(() => {
-    if (!logoUrl) { setLogoIsDark(null); return; }
-    getImageLuminance(logoUrl).then((lum) => setLogoIsDark(lum < 0.5));
-  }, [logoUrl]);
+  const uploadFile = async (file: File) => {
+    setUploading(true);
+    setUploadError('');
+    try {
+      const ext = file.name.split('.').pop() ?? 'png';
+      const path = `logo-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('logos').upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data } = supabase.storage.from('logos').getPublicUrl(path);
+      setLogoUrl(data.publicUrl);
+    } catch (e: unknown) {
+      setUploadError(e instanceof Error ? e.message : 'Upload mislukt.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadFile(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) uploadFile(file);
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -409,10 +468,6 @@ function BrandingTab({ settings, onSaved }: { settings: Record<string, string>; 
       setSaving(false);
     }
   };
-
-  // For preview: show how it looks in light and dark context
-  const darkModeFilter = logoIsDark === true ? 'invert(1) brightness(2)' : undefined;
-  const lightModeFilter = logoIsDark === false ? 'invert(1) brightness(2)' : undefined;
 
   return (
     <div className="max-w-lg">
@@ -440,44 +495,83 @@ function BrandingTab({ settings, onSaved }: { settings: Record<string, string>; 
         <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-4">
           Het logo wordt automatisch aangepast voor light/dark mode. Aanbevolen: SVG of transparante PNG.
         </p>
-        <input
-          type="url"
-          value={logoUrl}
-          onChange={(e) => setLogoUrl(e.target.value)}
-          placeholder="https://example.com/logo.png"
-          className="w-full border rounded-xl px-4 py-3 text-sm transition-all focus:outline-none focus:ring-2
-            bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700/50
-            text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-600
-            focus:ring-teal-500/40 focus:border-teal-500/50"
-        />
 
-        {/* Live dual preview */}
-        {logoUrl && (
-          <div className="mt-4">
-            <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-2">Voorbeeld:</p>
-            <div className="flex gap-3">
-              <div className="flex-1 rounded-xl border border-zinc-200 bg-white flex items-center justify-center p-3 h-14">
-                <img
-                  src={logoUrl}
-                  alt="Light preview"
-                  style={{ filter: lightModeFilter }}
-                  className="max-h-full max-w-full object-contain transition-[filter]"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-              </div>
-              <div className="flex-1 rounded-xl border border-zinc-700 bg-zinc-900 flex items-center justify-center p-3 h-14">
-                <img
-                  src={logoUrl}
-                  alt="Dark preview"
-                  style={{ filter: darkModeFilter }}
-                  className="max-h-full max-w-full object-contain transition-[filter]"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-              </div>
+        {/* Tab switcher */}
+        <div className="flex gap-1 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800 mb-4 w-fit">
+          {(['upload', 'url'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setLogoTab(tab)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                logoTab === tab
+                  ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm'
+                  : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'
+              }`}
+            >
+              {tab === 'upload' ? <Upload className="w-3 h-3" /> : <Link className="w-3 h-3" />}
+              {tab === 'upload' ? 'Uploaden' : 'URL'}
+            </button>
+          ))}
+        </div>
+
+        {logoTab === 'upload' ? (
+          <div>
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileInput} />
+            <div
+              onClick={() => !uploading && fileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              className={`relative flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-8 cursor-pointer transition-all ${
+                dragOver
+                  ? 'border-teal-500 bg-teal-50/50 dark:bg-teal-500/10'
+                  : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+              } ${uploading ? 'pointer-events-none opacity-70' : ''}`}
+            >
+              {uploading ? (
+                <Loader2 className="w-6 h-6 text-teal-500 animate-spin" />
+              ) : (
+                <Upload className="w-6 h-6 text-zinc-400" />
+              )}
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                {uploading ? 'Uploaden...' : 'Klik of sleep een afbeelding hierheen'}
+              </p>
+              <p className="text-xs text-zinc-400 dark:text-zinc-500">PNG, JPG, SVG, WebP — max 2 MB</p>
             </div>
-            <p className="text-xs text-zinc-400 mt-1.5">Links: light mode &nbsp;·&nbsp; Rechts: dark mode</p>
+            {uploadError && (
+              <p className="mt-2 text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3 shrink-0" />{uploadError}
+              </p>
+            )}
+          </div>
+        ) : (
+          <input
+            type="url"
+            value={logoUrl}
+            onChange={(e) => setLogoUrl(e.target.value)}
+            placeholder="https://example.com/logo.png"
+            className="w-full border rounded-xl px-4 py-3 text-sm transition-all focus:outline-none focus:ring-2
+              bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700/50
+              text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-600
+              focus:ring-teal-500/40 focus:border-teal-500/50"
+          />
+        )}
+
+        {/* Current logo + clear */}
+        {logoUrl && (
+          <div className="mt-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-700/50">
+            <div className="w-8 h-8 rounded bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 flex items-center justify-center p-1 shrink-0">
+              <img src={logoUrl} alt="" className="max-w-full max-h-full object-contain"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            </div>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400 truncate flex-1 font-mono">{logoUrl}</span>
+            <button onClick={() => setLogoUrl('')} className="text-zinc-400 hover:text-red-500 transition-colors shrink-0">
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
+
+        {logoUrl && <LogoPreview url={logoUrl} />}
       </div>
 
       {error && (
